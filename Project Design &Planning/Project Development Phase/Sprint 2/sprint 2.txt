@@ -1,0 +1,375 @@
+Data Preprocessing
+Import the libraries
+!pip install ibm-cos-sdk | grep -v 'already satisfied'
+import ibm_boto3
+from ibm_botocore.client import Config
+import pandas as pd
+import numpy as np
+import io, datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+from pylab import rcParams
+from sklearn.preprocessing import MinMaxScaler
+Looking in indexes: https://pypi.org/simple, https://us-python.pkg.dev/colab-wheels/public/simple/
+Collecting ibm-cos-sdk
+  Downloading ibm-cos-sdk-2.12.0.tar.gz (55 kB)
+Collecting ibm-cos-sdk-core==2.12.0
+  Downloading ibm-cos-sdk-core-2.12.0.tar.gz (956 kB)
+Collecting ibm-cos-sdk-s3transfer==2.12.0
+  Downloading ibm-cos-sdk-s3transfer-2.12.0.tar.gz (135 kB)
+Collecting jmespath<1.0.0,>=0.10.0
+  Downloading jmespath-0.10.0-py2.py3-none-any.whl (24 kB)
+Collecting requests<3.0,>=2.27.1
+  Downloading requests-2.28.1-py3-none-any.whl (62 kB)
+Collecting urllib3<1.27,>=1.26.9
+  Downloading urllib3-1.26.12-py2.py3-none-any.whl (140 kB)
+Building wheels for collected packages: ibm-cos-sdk, ibm-cos-sdk-core, ibm-cos-sdk-s3transfer
+  Building wheel for ibm-cos-sdk (setup.py): started
+  Building wheel for ibm-cos-sdk (setup.py): finished with status 'done'
+  Created wheel for ibm-cos-sdk: filename=ibm_cos_sdk-2.12.0-py3-none-any.whl size=73931 sha256=caeeb472b4fd1d9fea44dc714a285566e0a89cf88398929193ce8cd31f10fc75
+  Stored in directory: /root/.cache/pip/wheels/ec/94/29/2b57327cf00664b6614304f7958abd29d77ea0e5bbece2ea57
+  Building wheel for ibm-cos-sdk-core (setup.py): started
+  Building wheel for ibm-cos-sdk-core (setup.py): finished with status 'done'
+  Created wheel for ibm-cos-sdk-core: filename=ibm_cos_sdk_core-2.12.0-py3-none-any.whl size=562962 sha256=3a0092eb6532ecfcd802f20b9ea4b746b62050badd7b4f1fce222cd84d5a4e8d
+  Stored in directory: /root/.cache/pip/wheels/64/56/fb/5cd6f4f40406c828a5289b95b2752a4d142a9afb359244ed8d
+  Building wheel for ibm-cos-sdk-s3transfer (setup.py): started
+  Building wheel for ibm-cos-sdk-s3transfer (setup.py): finished with status 'done'
+  Created wheel for ibm-cos-sdk-s3transfer: filename=ibm_cos_sdk_s3transfer-2.12.0-py3-none-any.whl size=89778 sha256=ef5bc221717ec0746d9576a995be48b2dde7d8c7719c124d9e1113651a931c00
+  Stored in directory: /root/.cache/pip/wheels/57/79/6a/ffe3370ed7ebc00604f9f76766e1e0348dcdcad2b2e32df9e1
+Successfully built ibm-cos-sdk ibm-cos-sdk-core ibm-cos-sdk-s3transfer
+Installing collected packages: urllib3, requests, jmespath, ibm-cos-sdk-core, ibm-cos-sdk-s3transfer, ibm-cos-sdk
+  Attempting uninstall: urllib3
+    Found existing installation: urllib3 1.24.3
+    Uninstalling urllib3-1.24.3:
+      Successfully uninstalled urllib3-1.24.3
+  Attempting uninstall: requests
+    Found existing installation: requests 2.23.0
+    Uninstalling requests-2.23.0:
+      Successfully uninstalled requests-2.23.0
+Successfully installed ibm-cos-sdk-2.12.0 ibm-cos-sdk-core-2.12.0 ibm-cos-sdk-s3transfer-2.12.0 jmespath-0.10.0 requests-2.28.1 urllib3-1.26.12
+Importing the dataset
+cos_credentials={
+  "apikey": "5lDfM8QcqpTFlKVVjKmm06zGbSspFR6gqGpmbFDWLlRc",
+  "endpoints": "https://control.cloud-object-storage.cloud.ibm.com/v2/endpoints",
+  "iam_apikey_description": "Auto-generated for key crn:v1:bluemix:public:cloud-object-storage:global:a/d2c796b84a794b58a1cff48368133ea1:e1e617d9-39a8-465d-bd9a-f3ca9bbb5297:resource-key:cd3a6762-cdaf-4808-b931-198e378e86d5",
+  "iam_apikey_name": "pnt2022tmid13214",
+  "iam_role_crn": "crn:v1:bluemix:public:iam::::serviceRole:Writer",
+  "iam_serviceid_crn": "crn:v1:bluemix:public:iam-identity::a/d2c796b84a794b58a1cff48368133ea1::serviceid:ServiceId-469be452-375b-4d58-9c23-d742c9a3256e",
+  "resource_instance_id": "crn:v1:bluemix:public:cloud-object-storage:global:a/d2c796b84a794b58a1cff48368133ea1:e1e617d9-39a8-465d-bd9a-f3ca9bbb5297::"
+}
+auth_endpoint = 'https://iam.cloud.ibm.com/oidc/token'
+service_endpoint = 'https://s3.us-east.cloud-object-storage.appdomain.cloud'
+cos = ibm_boto3.client('s3',
+                         ibm_api_key_id=cos_credentials['apikey'],
+                        ibm_service_instance_id=cos_credentials['resource_instance_id'],
+                         ibm_auth_endpoint=auth_endpoint,
+                         config=Config(signature_version='oauth'),
+                         endpoint_url=service_endpoint)
+obj =cos.get_object(Bucket='pnt2022tmid13214', Key='Crude Oil Prices Daily.xlsx')
+df = pd.read_excel(io.BytesIO(obj['Body'].read()), header=None, names=['date', 'price'] ,skiprows=1)
+df.head()
+date	price
+0	1986-01-02	25.56
+1	1986-01-03	26.00
+2	1986-01-06	26.53
+3	1986-01-07	25.85
+4	1986-01-08	25.87
+Handling missing data
+df.isnull().any()
+date     False
+price     True
+dtype: bool
+df.dropna(axis=0,inplace=True)
+df.isnull().any()
+date     False
+price    False
+dtype: bool
+df.shape
+(8216, 2)
+Data visualization
+plot = plt.figure(figsize=(15, 6))
+time = pd.to_datetime(df['date'])
+price = list(df['price'])
+data = pd.Series(price, time)
+plt.plot(data)
+[]
+
+#Decompose the plot
+df.set_index('date', inplace=True)
+y = df['price'].resample('MS').mean()
+y.plot(figsize=(15, 6))
+plt.show()
+
+rcParams['figure.figsize'] = 18, 8
+decomposition = sm.tsa.seasonal_decompose(y, model='additive')
+fig = decomposition.plot()
+plt.show()
+
+Feature Scaling
+df1 = df.reset_index()['price']
+sc = MinMaxScaler(feature_range = (0, 1))
+df1 = sc.fit_transform(np.array(df1).reshape(-1,1))
+df1.shape
+(8216, 1)
+Train Test Split
+train_size = int(len(df1) * 0.80)
+test_size = len(df1) - train_size
+train, test = df1[0:train_size, :], df1[train_size:len(df1), :]
+len(test)
+1644
+Creating Window
+def dataset(df, lookback=1):
+    data_x, data_y = [], []
+    for i in range(len(df) - lookback - 1):
+        a = df[i:(i + lookback), 0]
+        data_x.append(a)
+        data_y.append(df[i + lookback, 0])
+    return np.array(data_x), np.array(data_y)
+
+time_step = 10
+# Reshape into X=t and Y=t+1
+X_train , Y_train = dataset(train,time_step)
+X_test , Y_test = dataset(test,time_step)
+# Reshape input to be [samples, time steps, features]
+X_train = X_train.reshape(X_train.shape[0],X_train.shape[1],1)
+X_test = X_test.reshape(X_test.shape[0],X_test.shape[1],1)
+X_train.shape
+(6561, 10, 1)
+Model Building
+Import the Model building libraries
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+Initializing the Model
+Adding LSTM Layers
+Adding Output Layers
+model = Sequential()
+model.add(LSTM(units = 10, return_sequences = True, input_shape = (X_train.shape[1], 1)))
+model.add(LSTM(units = 10, return_sequences = True))
+model.add(LSTM(units = 10))
+model.add(Dense(units = 1))
+model.compile(optimizer = 'adam', loss = 'mean_squared_error')
+model.summary()
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ lstm (LSTM)                 (None, 10, 10)            480       
+                                                                 
+ lstm_1 (LSTM)               (None, 10, 10)            840       
+                                                                 
+ lstm_2 (LSTM)               (None, 10)                840       
+                                                                 
+ dense (Dense)               (None, 1)                 11        
+                                                                 
+=================================================================
+Total params: 2,171
+Trainable params: 2,171
+Non-trainable params: 0
+_________________________________________________________________
+# 1st LSTM Layer 
+print(4 * 10 * (1 + 10 + 1))
+480
+# 2nd LSTM Layer 
+parameters = 4 * 10 * (10 + 10 + 1)
+print(parameters)
+840
+Configure the Learning Process
+history = model.fit(X_train, Y_train, epochs = 30, batch_size = 64,validation_data=(X_test, Y_test),verbose=2)
+Epoch 1/30
+103/103 - 12s - loss: 0.0169 - val_loss: 5.3363e-04 - 12s/epoch - 112ms/step
+Epoch 2/30
+103/103 - 1s - loss: 4.3714e-04 - val_loss: 5.3346e-04 - 1s/epoch - 11ms/step
+Epoch 3/30
+103/103 - 1s - loss: 4.2442e-04 - val_loss: 7.0360e-04 - 1s/epoch - 12ms/step
+Epoch 4/30
+103/103 - 1s - loss: 4.2458e-04 - val_loss: 6.5965e-04 - 1s/epoch - 12ms/step
+Epoch 5/30
+103/103 - 1s - loss: 4.1073e-04 - val_loss: 4.7929e-04 - 1s/epoch - 11ms/step
+Epoch 6/30
+103/103 - 1s - loss: 4.0332e-04 - val_loss: 5.0259e-04 - 1s/epoch - 13ms/step
+Epoch 7/30
+103/103 - 1s - loss: 3.9364e-04 - val_loss: 7.0065e-04 - 1s/epoch - 13ms/step
+Epoch 8/30
+103/103 - 1s - loss: 3.8856e-04 - val_loss: 5.6770e-04 - 1s/epoch - 11ms/step
+Epoch 9/30
+103/103 - 1s - loss: 3.8377e-04 - val_loss: 5.0593e-04 - 1s/epoch - 12ms/step
+Epoch 10/30
+103/103 - 1s - loss: 3.7437e-04 - val_loss: 5.1092e-04 - 1s/epoch - 11ms/step
+Epoch 11/30
+103/103 - 1s - loss: 3.6713e-04 - val_loss: 4.3710e-04 - 1s/epoch - 10ms/step
+Epoch 12/30
+103/103 - 2s - loss: 3.5691e-04 - val_loss: 6.1217e-04 - 2s/epoch - 15ms/step
+Epoch 13/30
+103/103 - 1s - loss: 3.5549e-04 - val_loss: 4.2948e-04 - 1s/epoch - 12ms/step
+Epoch 14/30
+103/103 - 1s - loss: 3.5067e-04 - val_loss: 7.5479e-04 - 1s/epoch - 12ms/step
+Epoch 15/30
+103/103 - 1s - loss: 3.4531e-04 - val_loss: 6.9258e-04 - 1s/epoch - 12ms/step
+Epoch 16/30
+103/103 - 1s - loss: 3.4350e-04 - val_loss: 4.0377e-04 - 1s/epoch - 10ms/step
+Epoch 17/30
+103/103 - 1s - loss: 3.2373e-04 - val_loss: 3.9595e-04 - 1s/epoch - 10ms/step
+Epoch 18/30
+103/103 - 1s - loss: 3.2312e-04 - val_loss: 3.9858e-04 - 795ms/epoch - 8ms/step
+Epoch 19/30
+103/103 - 1s - loss: 3.3746e-04 - val_loss: 3.9810e-04 - 705ms/epoch - 7ms/step
+Epoch 20/30
+103/103 - 1s - loss: 3.0962e-04 - val_loss: 4.0333e-04 - 693ms/epoch - 7ms/step
+Epoch 21/30
+103/103 - 1s - loss: 3.2527e-04 - val_loss: 3.5489e-04 - 692ms/epoch - 7ms/step
+Epoch 22/30
+103/103 - 1s - loss: 3.0033e-04 - val_loss: 4.0734e-04 - 692ms/epoch - 7ms/step
+Epoch 23/30
+103/103 - 1s - loss: 2.7648e-04 - val_loss: 3.3973e-04 - 700ms/epoch - 7ms/step
+Epoch 24/30
+103/103 - 1s - loss: 2.7321e-04 - val_loss: 3.8758e-04 - 701ms/epoch - 7ms/step
+Epoch 25/30
+103/103 - 1s - loss: 2.6222e-04 - val_loss: 3.2654e-04 - 709ms/epoch - 7ms/step
+Epoch 26/30
+103/103 - 1s - loss: 2.8513e-04 - val_loss: 4.1242e-04 - 760ms/epoch - 7ms/step
+Epoch 27/30
+103/103 - 1s - loss: 2.4564e-04 - val_loss: 4.2347e-04 - 712ms/epoch - 7ms/step
+Epoch 28/30
+103/103 - 1s - loss: 2.6508e-04 - val_loss: 2.9079e-04 - 704ms/epoch - 7ms/step
+Epoch 29/30
+103/103 - 1s - loss: 2.5275e-04 - val_loss: 2.9001e-04 - 730ms/epoch - 7ms/step
+Epoch 30/30
+103/103 - 1s - loss: 2.3635e-04 - val_loss: 2.6581e-04 - 710ms/epoch - 7ms/step
+Train the model
+train_predict = model.predict(X_train)
+test_predict = model.predict(X_test)
+206/206 [==============================] - 2s 3ms/step
+52/52 [==============================] - 0s 3ms/step
+# invert predictions
+train_predict = sc.inverse_transform(train_predict)
+Y_train = sc.inverse_transform([Y_train])
+test_predict = sc.inverse_transform(test_predict)
+Y_test = sc.inverse_transform([Y_test])
+Model evaluation
+print('Train Mean Absolute Error:', mean_absolute_error(Y_train[0], train_predict[:,0]))
+print('Train Root Mean Squared Error:',np.sqrt(mean_squared_error(Y_train[0], train_predict[:,0])))
+print('Test Mean Absolute Error:', mean_absolute_error(Y_test[0], test_predict[:,0]))
+print('Test Root Mean Squared Error:',np.sqrt(mean_squared_error(Y_test[0], test_predict[:,0])))
+Train Mean Absolute Error: 1.2571759644915208
+Train Root Mean Squared Error: 1.9685525432167308
+Test Mean Absolute Error: 1.7191186880846367
+Test Root Mean Squared Error: 2.201959455277266
+plt.figure(figsize=(8,4))
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Test Loss')
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epochs')
+plt.legend(loc='upper right')
+plt.show();
+
+data = [i for i in range(180)]
+plt.figure(figsize=(8,4))
+plt.plot(data, Y_test[0][:180], marker='.', label="Actual")
+plt.plot(data, test_predict[:,0][:180], 'r', label="Predicted")
+plt.tight_layout()
+plt.subplots_adjust(left=0.07)
+plt.ylabel('Price', size=15)
+plt.xlabel('Time step', size=15)
+plt.legend(fontsize=15)
+plt.show();
+
+Save the model
+model.save("model.h5")
+!tar -zcvf model.tgz model.h5
+model.h5
+Test the model
+# Model Testing
+look_back = 10
+trainPredictPlot = np.empty_like(df1)
+trainPredictPlot[:,:] = np.nan
+trainPredictPlot[look_back:len(train_predict)+look_back,:] = train_predict
+testPredictPlot = np.empty_like(df1)
+testPredictPlot[:,:] = np.nan
+testPredictPlot[len(train_predict)+(look_back*2)+1:len(df1)-1,:] = test_predict
+plt.plot(sc.inverse_transform(df1))
+plt.plot(trainPredictPlot)
+plt.plot(testPredictPlot)
+plt.show()
+
+x_input = test[len(test)-10:].reshape(1,-1)
+x_input.shape
+(1, 10)
+temp_input = list(x_input[0])
+temp_list = temp_input[0].tolist()
+temp_input
+[0.44172960165852215,
+ 0.48111950244335855,
+ 0.49726047682511476,
+ 0.4679401747371539,
+ 0.4729749740855915,
+ 0.47119798608026064,
+ 0.47341922108692425,
+ 0.4649785280616022,
+ 0.4703835332444839,
+ 0.47149415074781587]
+lst_output = []
+n_steps = 10
+i = 0
+while(i<10):
+  if(len(temp_input) > 10):
+    x_input = np.array(temp_input[1:])
+    print("Day {} Input {}".format(i,x_input),end="\n")
+    x_input = x_input.reshape(1,-1)
+    x_input = x_input.reshape((1,n_steps,1))
+    yhat = model.predict(x_input,verbose=0)
+    print("Day {} Output {}".format(i,yhat),end="\n")
+    temp_input.extend(yhat[0].tolist())
+    temp_input = temp_input[1:]
+    print("------------------------",end="\n")
+    lst_output.extend(yhat.tolist())
+    i = i+1
+  else:
+    x_input = x_input.reshape((1,n_steps,1))
+    yhat = model.predict(x_input,verbose=0)
+    print("Day {} output {}".format(i,yhat),end="\n")
+    temp_input.extend(yhat[0].tolist())
+    lst_output.extend(yhat.tolist())
+    i = i+1
+Day 0 output [[0.47466826]]
+Day 1 Input [0.4811195  0.49726048 0.46794017 0.47297497 0.47119799 0.47341922
+ 0.46497853 0.47038353 0.47149415 0.47466826]
+Day 1 Output [[0.4730847]]
+------------------------
+Day 2 Input [0.49726048 0.46794017 0.47297497 0.47119799 0.47341922 0.46497853
+ 0.47038353 0.47149415 0.47466826 0.47308469]
+Day 2 Output [[0.4729281]]
+------------------------
+Day 3 Input [0.46794017 0.47297497 0.47119799 0.47341922 0.46497853 0.47038353
+ 0.47149415 0.47466826 0.47308469 0.47292811]
+Day 3 Output [[0.4738831]]
+------------------------
+Day 4 Input [0.47297497 0.47119799 0.47341922 0.46497853 0.47038353 0.47149415
+ 0.47466826 0.47308469 0.47292811 0.47388309]
+Day 4 Output [[0.47438392]]
+------------------------
+Day 5 Input [0.47119799 0.47341922 0.46497853 0.47038353 0.47149415 0.47466826
+ 0.47308469 0.47292811 0.47388309 0.47438392]
+Day 5 Output [[0.47505116]]
+------------------------
+Day 6 Input [0.47341922 0.46497853 0.47038353 0.47149415 0.47466826 0.47308469
+ 0.47292811 0.47388309 0.47438392 0.47505116]
+Day 6 Output [[0.475685]]
+------------------------
+Day 7 Input [0.46497853 0.47038353 0.47149415 0.47466826 0.47308469 0.47292811
+ 0.47388309 0.47438392 0.47505116 0.475685  ]
+Day 7 Output [[0.47636652]]
+------------------------
+Day 8 Input [0.47038353 0.47149415 0.47466826 0.47308469 0.47292811 0.47388309
+ 0.47438392 0.47505116 0.475685   0.47636652]
+Day 8 Output [[0.47676253]]
+------------------------
+Day 9 Input [0.47149415 0.47466826 0.47308469 0.47292811 0.47388309 0.47438392
+ 0.47505116 0.475685   0.47636652 0.47676253]
+Day 9 Output [[0.4772393]]
+------------------------
